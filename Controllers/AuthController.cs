@@ -3,6 +3,12 @@ using DatingApp.API.Data;
 using System.Threading.Tasks;
 using DatingApp.API.Models;
 using DatingApp.API.Dtos;
+using DatingApp.API;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
+using System;
+using System.Security.Claims;
 
 namespace DatingApp.API.Controllers
 {
@@ -35,6 +41,36 @@ namespace DatingApp.API.Controllers
             var createUser = await _repo.Register(userToCreate, userForRegisterDto.Password);
 
             return StatusCode(201);
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody]UserForLoginDto userForLoginDto) 
+        {
+            var userFromRepo = await _repo.Login(userForLoginDto.Username, userForLoginDto.Password);
+
+            if (userFromRepo == null)
+                return Unauthorized();
+                //Security: Doesn't say if username exists or the password is incorrect, will make it harder for someone trying to break in
+
+            // generate JWT
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes("Super secret Key");
+
+            //Adding token and what it will contain
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new Claim[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, userFromRepo.Id.ToString()),
+                    new Claim(ClaimTypes.Name, userFromRepo.Username)
+                }),
+                Expires = DateTime.Now.AddDays(1),
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha512Signature)
+            };
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            var tokenString = tokenHandler.WriteToken(token);
+
+            return Ok( new {tokenString});
         }
     }
 }
